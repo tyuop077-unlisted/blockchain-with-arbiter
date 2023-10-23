@@ -55,23 +55,19 @@ const generateNextBlock = (blockchain: Block[], blockData: string): Block => {
 
 const printBlockchain = (blockchain: Block[]): void => {
   let errorAfterUnverified = false;
+  let label = "unknown";
   blockchain.forEach((block, i) => {
     if (i === 0) {
-      console.log(`Block #${i}: ${block.data} [genesis]`);
-      return;
-    }
-
-    if (errorAfterUnverified) {
-      console.log(`Block #${i}: ${block.data} [above invalid]`);
-      return;
-    }
-
-    if (block.isPreviousBlock(blockchain[i - 1])) {
-      console.log(`Block #${i}: ${block.data} [confirmed]`);
+      label = "genesis";
+    } else if (errorAfterUnverified) {
+      label = "above invalid";
+    } else if (block.isPreviousBlock(blockchain[i - 1])) {
+      label = "confirmed";
     } else {
-      console.error(`Block #${i}: ${block.data} [invalid]`);
+      label = "invalid";
       errorAfterUnverified = true;
     }
+    console.log(`Block #${i} (${block.hash.substring(0, 5)}): ${block.data} [${label}]`);
   });
 };
 
