@@ -16,14 +16,12 @@ function getUserInput(question: string): Promise<string> {
 }
 
 class Block {
-  index: number;
   previousHash: string;
   timestamp: Number;
   data: string;
   hash: string;
 
-  constructor(index: number, previousHash: string, timestamp: Number, data: string, hash?: string) {
-    this.index = index;
+  constructor(previousHash: string, timestamp: Number, data: string, hash?: string) {
     this.previousHash = previousHash;
     this.timestamp = timestamp;
     this.data = data;
@@ -33,45 +31,45 @@ class Block {
   get isVerified() {
     return calculateHash(this) === this.hash;
   }
+
+  isPreviousBlock(block: Block) {
+    return block.hash === this.previousHash;
+  }
 }
 
 const calculateHash = (block: Block): string => {
-  const blockData = `${block.index}${block.previousHash}${block.timestamp}${block.data}`;
+  const blockData = `${block.previousHash}${block.timestamp}${block.data}`;
   return createHash("sha256").update(blockData).digest("hex");
 };
 
 const createGenesisBlock = (): Block => {
-  return new Block(0, "0", Date.now(), "Genesis");
+  return new Block("0", Date.now(), "Genesis");
 };
 
 const generateNextBlock = (blockchain: Block[], blockData: string): Block => {
   const previousBlock = blockchain[blockchain.length - 1];
-  const nextIndex = previousBlock.index + 1;
   const nextTimestamp = Date.now();
   const nextHash = previousBlock.hash;
-  return new Block(nextIndex, nextHash, nextTimestamp, blockData);
+  return new Block(nextHash, nextTimestamp, blockData);
 };
-
-const isValidNewBlock = (newBlock: Block, previousBlock: Block): boolean =>
-  previousBlock.index + 1 === newBlock.index && previousBlock.hash === newBlock.previousHash && newBlock.isVerified;
 
 const printBlockchain = (blockchain: Block[]): void => {
   let errorAfterUnverified = false;
   blockchain.forEach((block, i) => {
     if (i === 0) {
-      console.log(`Block #${block.index}: ${block.data} [genesis]`);
+      console.log(`Block #${i}: ${block.data} [genesis]`);
       return;
     }
 
     if (errorAfterUnverified) {
-      console.log(`Block #${block.index}: ${block.data} [above invalid]`);
+      console.log(`Block #${i}: ${block.data} [above invalid]`);
       return;
     }
 
-    if (isValidNewBlock(block, blockchain[i - 1])) {
-      console.log(`Block #${block.index}: ${block.data} [confirmed]`);
+    if (block.isPreviousBlock(blockchain[i - 1])) {
+      console.log(`Block #${i}: ${block.data} [confirmed]`);
     } else {
-      console.error(`Block #${block.index}: ${block.data} [invalid]`);
+      console.error(`Block #${i}: ${block.data} [invalid]`);
       errorAfterUnverified = true;
     }
   });
@@ -80,7 +78,7 @@ const printBlockchain = (blockchain: Block[]): void => {
 const loadBlockchain = (): Block[] => {
   if (existsSync("blockchain.json")) {
     return JSON.parse(readFileSync("blockchain.json", "utf8")).map(
-      (data: any) => new Block(data.index, data.previousHash, data.timestamp, data.data, data.hash)
+      (data: any) => new Block(data.previousHash, data.timestamp, data.data, data.hash)
     );
   } else {
     const genesisBlock = createGenesisBlock();
