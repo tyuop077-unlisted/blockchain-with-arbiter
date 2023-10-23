@@ -61,7 +61,7 @@ const printBlockchain = (blockchain: Block[]): void => {
       label = "genesis";
     } else if (errorAfterUnverified) {
       label = "above invalid";
-    } else if (block.isPreviousBlock(blockchain[i - 1])) {
+    } else if (block.isPreviousBlock(blockchain[i - 1]) && block.isVerified) {
       label = "confirmed";
     } else {
       label = "invalid";
