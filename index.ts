@@ -43,7 +43,7 @@ const calculateHash = (block: Block): string => {
 };
 
 const createGenesisBlock = (): Block => {
-  return new Block("0", Date.now(), "Genesis");
+  return new Block("", Date.now(), "Genesis");
 };
 
 const generateNextBlock = (blockchain: Block[], blockData: string): Block => {
@@ -79,13 +79,13 @@ const loadBlockchain = (): Block[] => {
   } else {
     const genesisBlock = createGenesisBlock();
     const blockchain: Block[] = [genesisBlock];
-    writeFileSync("blockchain.json", JSON.stringify(blockchain));
+    saveBlockchain(blockchain);
     return blockchain;
   }
 };
 
 const saveBlockchain = (blockchain: Block[]) => {
-  writeFileSync("blockchain.json", JSON.stringify(blockchain));
+  writeFileSync("blockchain.json", JSON.stringify(blockchain, null, 2) + "\n");
 };
 
 const blockchain: Block[] = loadBlockchain();
