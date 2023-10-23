@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { writeFileSync, readFileSync, existsSync } from "fs";
+import { existsSync, readFileSync, writeFileSync } from "fs";
 import * as readline from "readline";
 
 const rl = readline.createInterface({
@@ -22,12 +22,16 @@ class Block {
   data: string;
   hash: string;
 
-  constructor(index: number, previousHash: string, timestamp: Number, data: string, hash: string) {
+  constructor(index: number, previousHash: string, timestamp: Number, data: string, hash?: string) {
     this.index = index;
     this.previousHash = previousHash;
     this.timestamp = timestamp;
     this.data = data;
-    this.hash = hash;
+    this.hash = hash ?? calculateHash(this);
+  }
+
+  get isVerified() {
+    return calculateHash(this) === this.hash;
   }
 }
 
@@ -37,9 +41,7 @@ const calculateHash = (block: Block): string => {
 };
 
 const createGenesisBlock = (): Block => {
-  const genesisBlock = new Block(0, "0", Date.now(), "Genesis", "Genesis");
-  genesisBlock.hash = calculateHash(genesisBlock);
-  return genesisBlock;
+  return new Block(0, "0", Date.now(), "Genesis");
 };
 
 const generateNextBlock = (blockchain: Block[], blockData: string): Block => {
@@ -47,21 +49,11 @@ const generateNextBlock = (blockchain: Block[], blockData: string): Block => {
   const nextIndex = previousBlock.index + 1;
   const nextTimestamp = Date.now();
   const nextHash = previousBlock.hash;
-  const newBlock = new Block(nextIndex, nextHash, nextTimestamp, blockData, "");
-  newBlock.hash = calculateHash(newBlock);
-  return newBlock;
+  return new Block(nextIndex, nextHash, nextTimestamp, blockData);
 };
 
-const isValidNewBlock = (newBlock: Block, previousBlock: Block): boolean => {
-  if (previousBlock.index + 1 != newBlock.index) {
-    return false;
-  } else if (previousBlock.hash != newBlock.previousHash) {
-    return false;
-  } else if (calculateHash(newBlock) != newBlock.hash) {
-    return false;
-  }
-  return true;
-};
+const isValidNewBlock = (newBlock: Block, previousBlock: Block): boolean =>
+  previousBlock.index + 1 === newBlock.index && previousBlock.hash === newBlock.previousHash && newBlock.isVerified;
 
 const printBlockchain = (blockchain: Block[]): void => {
   let errorAfterUnverified = false;
@@ -143,7 +135,7 @@ const main = async () => {
   console.log("4. Modify Block");
   console.log("5. Exit");
 
-  const choice = Number(await getUserInput("Choose an option: "));
+  const choice = Number(await getUserInput("> "));
   console.log("===============================");
 
   switch (choice) {
