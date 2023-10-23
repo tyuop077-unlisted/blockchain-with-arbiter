@@ -1,6 +1,10 @@
-import { createHash } from "crypto";
+import { createHash, createPublicKey, createVerify } from "crypto";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import * as readline from "readline";
+
+let ARBITER_PUBLIC_KEY: string;
+
+const verifier = createVerify("RSA-SHA256");
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -15,42 +19,84 @@ function getUserInput(question: string): Promise<string> {
   });
 }
 
-class Block {
+interface IBlock {
   previousHash: string;
-  timestamp: Number;
+  timestamp: number;
+  data: string;
+  signature?: string;
+  hash?: string;
+}
+
+export class Block implements IBlock {
+  previousHash: string;
+  timestamp: number;
   data: string;
   hash: string;
+  signature?: string;
 
-  constructor(previousHash: string, timestamp: Number, data: string, hash?: string) {
-    this.previousHash = previousHash;
-    this.timestamp = timestamp;
-    this.data = data;
-    this.hash = hash ?? calculateHash(this);
+  constructor(blockData: IBlock) {
+    this.previousHash = blockData.previousHash;
+    this.timestamp = blockData.timestamp;
+    this.data = blockData.data;
+    this.hash = blockData.hash ?? calculateHash(this);
+    this.signature = blockData.signature;
   }
 
   get isVerified() {
-    return calculateHash(this) === this.hash;
+    verifier.update(`${this.previousHash}${this.timestamp}${this.data}${this.signature}`);
+    const publicKeyBuffer = Buffer.from(ARBITER_PUBLIC_KEY, "hex");
+    console.log(this.signature);
+    const publicKeyObject = createPublicKey({
+      key: publicKeyBuffer,
+      format: "der",
+      type: "pkcs1",
+    });
+    return verifier.verify(publicKeyObject, this.signature!, "hex");
   }
 
   isPreviousBlock(block: Block) {
     return block.hash === this.previousHash;
   }
+
+  async sign() {
+    this.signature = await fetch(`http://itislabs.ru/ts?digest=${calculateHash(this)}`, {
+      headers: {
+        "content-type": "application/json",
+      },
+    })
+      .then(r => r.json())
+      .then(r => r.timeStampToken.signature);
+    console.log(`Signed ${this.hash.substring(0, 5)}`);
+  }
 }
 
 const calculateHash = (block: Block): string => {
-  const blockData = `${block.previousHash}${block.timestamp}${block.data}`;
+  const blockData = `${block.previousHash}${block.timestamp}${block.data}${block.signature}`;
   return createHash("sha256").update(blockData).digest("hex");
 };
 
 const createGenesisBlock = (): Block => {
-  return new Block("", Date.now(), "Genesis");
+  return new Block({
+    // "", Date.now(), "Genesis", ""
+    previousHash: "",
+    timestamp: Date.now(),
+    data: "Genesis",
+    hash: undefined,
+    signature: undefined,
+  });
 };
 
-const generateNextBlock = (blockchain: Block[], blockData: string): Block => {
-  const previousBlock = blockchain[blockchain.length - 1];
-  const nextTimestamp = Date.now();
-  const nextHash = previousBlock.hash;
-  return new Block(nextHash, nextTimestamp, blockData);
+const generateNextBlock = async (previousBlock: Block, blockData: string): Promise<Block> => {
+  const timestamp = Date.now();
+  const block = new Block({
+    previousHash: previousBlock.hash,
+    timestamp,
+    data: blockData,
+    signature: undefined,
+    hash: undefined,
+  });
+  await block.sign();
+  return block;
 };
 
 const printBlockchain = (blockchain: Block[]): void => {
@@ -74,7 +120,14 @@ const printBlockchain = (blockchain: Block[]): void => {
 const loadBlockchain = (): Block[] => {
   if (existsSync("blockchain.json")) {
     return JSON.parse(readFileSync("blockchain.json", "utf8")).map(
-      (data: any) => new Block(data.previousHash, data.timestamp, data.data, data.hash)
+      (data: IBlock) =>
+        new Block({
+          previousHash: data.previousHash,
+          data: data.data,
+          hash: data.hash,
+          signature: data.signature,
+          timestamp: data.timestamp,
+        })
     );
   } else {
     const genesisBlock = createGenesisBlock();
@@ -93,7 +146,7 @@ const blockchain: Block[] = loadBlockchain();
 class CLI {
   static async addBlock() {
     const blockData = await getUserInput("Block Data: ");
-    const newBlock = generateNextBlock(blockchain, blockData);
+    const newBlock = await generateNextBlock(blockchain.at(-1)!, blockData);
     blockchain.push(newBlock);
     saveBlockchain(blockchain);
     console.log(`Block added. New Length: ${blockchain.length}`);
@@ -154,6 +207,15 @@ const main = async () => {
 };
 
 const loop = async () => {
+  /*await fetch("http://itislabs.ru/ts/public")
+    .then(r => r.text())
+    .then(data => (ARBITER_PUBLIC_KEY = data));
+  console.log(`pubkey: ${ARBITER_PUBLIC_KEY}`);*/
+  ARBITER_PUBLIC_KEY =
+    "30819f300d06092a864886f70d010101050003818d0030818902818100a811365d2f3642952751029edf87c8fa2aeb6e0" +
+    "feafcf800190a7dd2cf750c63262f6abd8ef52b251c0e10291d5e2f7e6682de1aae1d64d4f9b242050f898744ca300a44c" +
+    "4d8fc8af0e7a1c7fd9b606d7bde304b29bec01fbef554df6ba1b7b1ec355e1ff68bd37f3d40fb27d1aa233fe3dd6b63f72" +
+    "41e734739851ce8c590f70203010001";
   while (true) {
     await main();
   }
